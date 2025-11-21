@@ -1336,24 +1336,61 @@ class ElasticsearchQueryBuilderV5 {
     return null;
   }
 
+  // detectTypeKeyword(query, language) {
+  //   const lowered = query.toLowerCase();
+  //   const typoType = this.detectTypoKeyword(query);
+  //   if (typoType) {
+  //     console.log(`   ⚠️  Detected typo for type: ${typoType}`);
+  //     return typoType;
+  //   }
+
+  //   if (lowered.includes('airport') || lowered.includes('aeroport')) return 'airport';
+  //   if (lowered.includes('hotel') || lowered.includes('inn') || 
+  //       lowered.includes('resort') || lowered.includes('hostel') ||
+  //       lowered.includes('motel')) return 'hotel';
+  //   if (query.includes('مطار')) return 'airport';
+  //   if (query.includes('فندق')) return 'hotel';
+  //   if (lowered.includes('aeropuerto')) return 'airport';
+
+  //   return null;
+  // }
+
+
+
   detectTypeKeyword(query, language) {
-    const lowered = query.toLowerCase();
-    const typoType = this.detectTypoKeyword(query);
-    if (typoType) {
-      console.log(`   ⚠️  Detected typo for type: ${typoType}`);
-      return typoType;
-    }
-
-    if (lowered.includes('airport') || lowered.includes('aeroport')) return 'airport';
-    if (lowered.includes('hotel') || lowered.includes('inn') || 
-        lowered.includes('resort') || lowered.includes('hostel') ||
-        lowered.includes('motel')) return 'hotel';
-    if (query.includes('مطار')) return 'airport';
-    if (query.includes('فندق')) return 'hotel';
-    if (lowered.includes('aeropuerto')) return 'airport';
-
-    return null;
+  const lowered = query.toLowerCase();
+  const typoType = this.detectTypoKeyword(query);
+  
+  if (typoType) {
+    console.log(`   ⚠️  Detected typo for type: ${typoType}`);
+    return typoType;
   }
+
+  // ✅ Check for all type keywords
+  const hasAirport = lowered.includes('airport') || 
+                     lowered.includes('aeroport') || 
+                     lowered.includes('aeropuerto') ||
+                     query.includes('مطار');
+                     
+  const hasHotel = lowered.includes('hotel') || 
+                   lowered.includes('inn') || 
+                   lowered.includes('resort') || 
+                   lowered.includes('hostel') ||
+                   lowered.includes('motel') ||
+                   query.includes('فندق');
+
+  // ✅ Priority: hotel > airport (more specific destination)
+  if (hasHotel && hasAirport) {
+    console.log(`   🔀 Mixed query: prioritizing HOTEL`);
+    return 'hotel';
+  }
+
+  // ✅ Single type detection
+  if (hasAirport) return 'airport';
+  if (hasHotel) return 'hotel';
+
+  return null;
+}
 
   tokenizeQuery(query, language) {
     const stopWords = {
