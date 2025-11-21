@@ -1201,9 +1201,25 @@ class ElasticsearchQueryBuilderV5 {
   analyzeQuery(query, language) {
     const trimmed = query.trim();
     const cleanedInput = this.cleanInput(trimmed);
-    const isIATA = this.detectIATA(cleanedInput);
+   
     const typeKeyword = this.detectTypeKeyword(cleanedInput, language);
     const words = this.tokenizeQuery(cleanedInput, language);
+
+
+    let isIATA = this.detectIATA(cleanedInput);
+    let iataCode = null;
+    if (!isIATA && words.length > 1) {
+      for (const word of words) {
+        if (/^[A-Z]{3}$/i.test(word)) {
+          isIATA = true;
+          iataCode = word.toUpperCase();
+          console.log(`   ⚠️  Detected IATA code within multi-word query: ${iataCode}`);
+          break;
+        }
+      }
+    }
+
+
 
     return {
       original: query,
@@ -1212,6 +1228,7 @@ class ElasticsearchQueryBuilderV5 {
       words: words,
       wordCount: words.length,
       isIATA: isIATA,
+      iataCode: iataCode || (isIATA ? cleanedInput.toUpperCase() : null),
       typeKeyword: typeKeyword,
       language: language,
       cleanedQuery: words.join(' ')
@@ -1357,45 +1374,104 @@ class ElasticsearchQueryBuilderV5 {
     return [...new Set(words)];
   }
 
-  buildIATAQuery(analysis, language, size) {
-    const languageField = config.LANGUAGES.FIELDS[language];
-    const englishField = config.LANGUAGES.FIELDS['en'];
+  // buildIATAQuery(analysis, language, size) {
+  //   const languageField = config.LANGUAGES.FIELDS[language];
+  //   const englishField = config.LANGUAGES.FIELDS['en'];
+    
 
-    return {
-      size: size,
-      query: {
-        bool: {
-          should: [
-            {
-              term: {
-                iata: {
-                  value: analysis.cleaned.toUpperCase(),
-                  boost: 10000
-                }
-              }
-            },
-            {
-              term: {
-                type: {
-                  value: 'airport',
-                  boost: 5000
-                }
-              }
-            },
-            {
-              multi_match: {
-                query: analysis.cleaned,
-                fields: [englishField, languageField],
-                type: 'phrase_prefix',
-                boost: 100
+  //   return {
+  //     size: size,
+  //     query: {
+  //       bool: {
+  //         should: [
+  //           {
+  //             term: {
+  //               iata: {
+  //                 value: analysis.cleaned.toUpperCase(),
+  //                 boost: 10000
+  //               }
+  //             }
+  //           },
+  //           {
+  //             term: {
+  //               type: {
+  //                 value: 'airport',
+  //                 boost: 5000
+  //               }
+  //             }
+  //           },
+  //           {
+  //             multi_match: {
+  //               query: analysis.cleaned,
+  //               fields: [englishField, languageField],
+  //               type: 'phrase_prefix',
+  //               boost: 100
+  //             }
+  //           }
+  //         ]
+  //       }
+  //     },
+  //     sort: [{ _score: { order: 'desc' } }]
+  //   };
+  // }
+
+
+  buildIATAQuery(analysis, language, size) {
+  const languageField = config.LANGUAGES.FIELDS[language];
+  const englishField = config.LANGUAGES.FIELDS['en'];
+  
+ 
+  const iataCode = analysis.iataCode || analysis.cleaned.toUpperCase();
+
+  return {
+    size: size,
+    query: {
+      bool: {
+        should: [
+          {
+            term: {
+              iata: {
+                value: iataCode,
+                boost: 100000  
               }
             }
-          ]
-        }
-      },
-      sort: [{ _score: { order: 'desc' } }]
-    };
-  }
+          },
+          {
+            bool: {
+              must: [
+                {
+                  term: {
+                    iata: {
+                      value: iataCode,
+                      boost: 50000
+                    }
+                  }
+                },
+                {
+                  term: {
+                    type: {
+                      value: 'airport',
+                      boost: 1000
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            multi_match: {
+              query: analysis.cleaned,
+              fields: [englishField, languageField],
+              type: 'phrase_prefix',
+              boost: 100
+            }
+          }
+        ]
+      }
+    },
+    sort: [{ _score: { order: 'desc' } }]
+  };
+}
 
   buildStandardQuery(analysis, language, size) {
     const languageField = config.LANGUAGES.FIELDS[language];
@@ -1418,6 +1494,44 @@ class ElasticsearchQueryBuilderV5 {
              !lower.includes('مطار') &&
              !lower.includes('فندق');
     });
+
+  if (typeKeyword && locationWords.length === 0) {
+    console.log(`   ⚠️  Type-only query: "${typeKeyword}"`);
+    
+    return {
+      size: size,
+      query: {
+        term: {
+          type: {
+            value: typeKeyword
+          }
+        }
+      },
+      sort: [{ _score: { order: 'desc' } }]
+    };
+  }
+
+  // ✅ NEW: Check if query contains potential IATA code
+  let potentialIATA = null;
+  for (const word of words) {
+    if (/^[a-z]{3}$/i.test(word)) {
+      potentialIATA = word.toUpperCase();
+      console.log(`   ✈️  Potential IATA in query: ${potentialIATA}`);
+      break;
+    }
+  }
+
+  // ✅ NEW: If IATA found, add high-priority IATA match
+  if (potentialIATA) {
+    shouldClauses.push({
+      term: {
+        iata: {
+          value: potentialIATA,
+          boost: 500000  // ✅ Highest priority
+        }
+      }
+    });
+  }
 
     // ================================================
     // 🥇 TIER 1: EXACT MATCHES (100K+ scores)
