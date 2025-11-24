@@ -1180,60 +1180,126 @@
 const config = require('../config');
 
 class ElasticsearchQueryBuilderV5 {
-  buildQuery(query, language = 'en', size = 10) {
-    const analysis = this.analyzeQuery(query, language);
+  // buildQuery(query, language = 'en', size = 10) {
+  //   const analysis = this.analyzeQuery(query, language);
     
-    if (analysis.typeKeyword) {
-      console.log(`   Type Keyword Found: ${analysis.typeKeyword}`);
-    }
-    if (analysis.isIATA) {
-      console.log(`   Format: IATA Code`);
-    }
-    console.log('');
+  //   if (analysis.typeKeyword) {
+  //     console.log(`   Type Keyword Found: ${analysis.typeKeyword}`);
+  //   }
+  //   if (analysis.isIATA) {
+  //     console.log(`   Format: IATA Code`);
+  //   }
+  //   console.log('');
 
-    if (analysis.isIATA) {
-      return this.buildIATAQuery(analysis, language, size);
-    }
+  //   if (analysis.isIATA) {
+  //     return this.buildIATAQuery(analysis, language, size);
+  //   }
 
-    return this.buildStandardQuery(analysis, language, size);
+  //   return this.buildStandardQuery(analysis, language, size);
+  // }
+
+  // analyzeQuery(query, language) {
+  //   const trimmed = query.trim();
+  //   const cleanedInput = this.cleanInput(trimmed);
+   
+  //   const typeKeyword = this.detectTypeKeyword(cleanedInput, language);
+  //   const words = this.tokenizeQuery(cleanedInput, language);
+
+
+  //   let isIATA = this.detectIATA(cleanedInput);
+  //   let iataCode = null;
+  //   if (!isIATA && words.length > 1) {
+  //     for (const word of words) {
+  //       if (/^[A-Z]{3}$/i.test(word)) {
+  //         isIATA = true;
+  //         iataCode = word.toUpperCase();
+  //         console.log(`   ⚠️  Detected IATA code within multi-word query: ${iataCode}`);
+  //         break;
+  //       }
+  //     }
+  //   }
+
+
+
+  //   return {
+  //     original: query,
+  //     trimmed: trimmed,
+  //     cleaned: cleanedInput,
+  //     words: words,
+  //     wordCount: words.length,
+  //     isIATA: isIATA,
+  //     iataCode: iataCode || (isIATA ? cleanedInput.toUpperCase() : null),
+  //     typeKeyword: typeKeyword,
+  //     language: language,
+  //     cleanedQuery: words.join(' ')
+  //   };
+  // }
+
+  buildQuery(query, language = 'en', size = 10, enhancedAnalysis = null) {
+  const analysis = this.analyzeQuery(query, language);
+  
+  // ✅ Merge enhanced analysis (validIATATokens from service)
+  if (enhancedAnalysis && enhancedAnalysis.validIATATokens) {
+    analysis.validIATATokens = enhancedAnalysis.validIATATokens;
   }
+  
+  if (analysis.typeKeyword) {
+    console.log(`   Type Keyword Found: ${analysis.typeKeyword}`);
+  }
+  if (analysis.isIATA) {
+    console.log(`   Format: IATA Code`);
+  }
+  console.log('');
+
+  if (analysis.isIATA) {
+    return this.buildIATAQuery(analysis, language, size);
+  }
+
+  return this.buildStandardQuery(analysis, language, size);
+}
+
 
   analyzeQuery(query, language) {
-    const trimmed = query.trim();
-    const cleanedInput = this.cleanInput(trimmed);
-   
-    const typeKeyword = this.detectTypeKeyword(cleanedInput, language);
-    const words = this.tokenizeQuery(cleanedInput, language);
+  const trimmed = query.trim();
+  const cleanedInput = this.cleanInput(trimmed);
+  const typeKeyword = this.detectTypeKeyword(cleanedInput, language);
+  const words = this.tokenizeQuery(cleanedInput, language);
+  
+  // ✅ STRICT IATA detection (only for pure 3-letter queries)
+  const isIATA = this.detectIATA(cleanedInput);
+  
+  // ✅ Collect potential IATA tokens (for validation later)
+  // BUT: Only if there's NO type keyword (airport/hotel)
+  // const iataTokens = [];
+  
+  // if (!typeKeyword || typeKeyword === 'airport') {
+  //   for (const word of words) {
+  //     if (/^[a-z]{3}$/i.test(word)) {
+  //       iataTokens.push(word.toUpperCase());
+  //     }
+  //   }
+  // }
+
+  // if (iataTokens.length > 0) {
+  //   console.log(`   📍 Potential IATA tokens: ${iataTokens.join(', ')}`);
+  // }
+
+  return {
+    original: query,
+    trimmed: trimmed,
+    cleaned: cleanedInput,
+    words: words,
+    wordCount: words.length,
+    isIATA: isIATA,  // ✅ Only true for pure 3-letter queries like "LHR"
+    iataCode: isIATA ? cleanedInput.toUpperCase() : null,
+    typeKeyword: typeKeyword,
+    language: language,
+    cleanedQuery: words.join(' ')
+  };
+}
 
 
-    let isIATA = this.detectIATA(cleanedInput);
-    let iataCode = null;
-    if (!isIATA && words.length > 1) {
-      for (const word of words) {
-        if (/^[A-Z]{3}$/i.test(word)) {
-          isIATA = true;
-          iataCode = word.toUpperCase();
-          console.log(`   ⚠️  Detected IATA code within multi-word query: ${iataCode}`);
-          break;
-        }
-      }
-    }
 
-
-
-    return {
-      original: query,
-      trimmed: trimmed,
-      cleaned: cleanedInput,
-      words: words,
-      wordCount: words.length,
-      isIATA: isIATA,
-      iataCode: iataCode || (isIATA ? cleanedInput.toUpperCase() : null),
-      typeKeyword: typeKeyword,
-      language: language,
-      cleanedQuery: words.join(' ')
-    };
-  }
 
   cleanInput(query) {
     return query
@@ -1517,6 +1583,32 @@ class ElasticsearchQueryBuilderV5 {
 
     const shouldClauses = [];
 
+    const validIATAs = analysis.validIATATokens || [];
+
+    if (validIATAs.length > 0) {
+      console.log(`   🚀 Boosting validated IATA codes: ${validIATAs.join(', ')}`);
+      for (const code of validIATAs) {
+        shouldClauses.push({
+          term: {
+            iata: {
+              value: code,
+              boost: 1000000
+            }
+          }
+        });
+      }
+       if (!typeKeyword || typeKeyword === 'airport') {
+        shouldClauses.push({
+          term: {
+            type: {
+              value: 'airport',
+              boost: 50000
+            }
+          }
+        });
+      } 
+    }
+
     const locationWords = words.filter(word => {
       if (this.detectTypoKeyword(word)) return false;
       const lower = word.toLowerCase();
@@ -1762,6 +1854,238 @@ class ElasticsearchQueryBuilderV5 {
       sort: [{ _score: { order: 'desc' } }]
     };
   }
+//   buildStandardQuery(analysis, language, size) {
+//   const languageField = config.LANGUAGES.FIELDS[language];
+//   const englishField = config.LANGUAGES.FIELDS['en'];
+//   const { words, cleanedQuery, typeKeyword } = analysis;
+
+//   const shouldClauses = [];
+
+//   // ✅ REMOVE all validIATAs logic for now - it's causing issues
+//   // We'll add it back properly later
+
+//   const locationWords = words.filter(word => {
+//     if (this.detectTypoKeyword(word)) return false;
+//     const lower = word.toLowerCase();
+//     return !lower.includes('airport') && 
+//            !lower.includes('hotel') &&
+//            !lower.includes('aeroport') &&
+//            !lower.includes('aeropuerto') &&
+//            !lower.includes('inn') &&
+//            !lower.includes('resort') &&
+//            !lower.includes('hostel') &&
+//            !lower.includes('motel') &&
+//            !lower.includes('مطار') &&
+//            !lower.includes('فندق');
+//   });
+
+//   // Type-only query
+//   if (typeKeyword && locationWords.length === 0) {
+//     console.log(`   ⚠️  Type-only query: "${typeKeyword}"`);
+    
+//     return {
+//       size: size,
+//       query: {
+//         term: {
+//           type: {
+//             value: typeKeyword
+//           }
+//         }
+//       },
+//       sort: [{ _score: { order: 'desc' } }]
+//     };
+//   }
+
+//   // ✅ REMOVED: potentialIATA logic - it was treating "taj" as IATA
+
+//   // ================================================
+//   // 🥇 TIER 1: EXACT MATCHES (100K+ scores)
+//   // ================================================
+  
+//   if (typeKeyword && locationWords.length > 0) {
+//     const locationPhrase = locationWords.join(' ');
+//     shouldClauses.push({
+//       bool: {
+//         must: [
+//           {
+//             match_phrase: {
+//               [englishField]: {
+//                 query: locationPhrase,
+//                 boost: 1000
+//               }
+//             }
+//           },
+//           {
+//             term: {
+//               type: typeKeyword
+//             }
+//           }
+//         ],
+//         boost: 100
+//       }
+//     });
+//   }
+
+//   shouldClauses.push({
+//     term: {
+//       [`${englishField}.keyword`]: {
+//         value: cleanedQuery,
+//         boost: 80000
+//       }
+//     }
+//   });
+
+//   // ================================================
+//   // 🥈 TIER 2: STRONG MATCHES (50K-100K scores)
+//   // ================================================
+  
+//   if (typeKeyword && locationWords.length > 0) {
+//     shouldClauses.push({
+//       bool: {
+//         must: [
+//           ...locationWords.map(word => ({
+//             match: {
+//               [englishField]: {
+//                 query: word,
+//                 fuzziness: 0,
+//                 boost: 500
+//               }
+//             }
+//           })),
+//           {
+//             term: {
+//               type: typeKeyword
+//             }
+//           }
+//         ],
+//         boost: 100
+//       }
+//     });
+//   }
+
+//   shouldClauses.push({
+//     match_phrase: {
+//       [englishField]: {
+//         query: cleanedQuery,
+//         boost: 50000
+//       }
+//     }
+//   });
+
+//   // ================================================
+//   // 🥉 TIER 3: MODERATE MATCHES (20K-50K scores)
+//   // ================================================
+  
+//   if (typeKeyword && locationWords.length > 0) {
+//     shouldClauses.push({
+//       bool: {
+//         must: [
+//           ...locationWords.map(word => ({
+//             match: {
+//               [englishField]: {
+//                 query: word,
+//                 fuzziness: word.length > 5 ? 1 : 0,
+//                 prefix_length: 2,
+//                 boost: 200
+//               }
+//             }
+//           })),
+//           {
+//             term: {
+//               type: typeKeyword
+//             }
+//           }
+//         ],
+//         boost: 100
+//       }
+//     });
+//   }
+
+//   shouldClauses.push({
+//     match_phrase: {
+//       [englishField]: {
+//         query: cleanedQuery,
+//         slop: 2,
+//         boost: 30000
+//       }
+//     }
+//   });
+
+//   if (typeKeyword) {
+//     shouldClauses.push({
+//       term: {
+//         type: {
+//           value: typeKeyword,
+//           boost: 25000
+//         }
+//       }
+//     });
+//   }
+
+//   // ================================================
+//   // 🏅 TIER 4: WEAK MATCHES (5K-20K scores)
+//   // ================================================
+  
+//   if (words.length >= 2) {
+//     shouldClauses.push({
+//       bool: {
+//         must: words.map(word => ({
+//           match: {
+//             [englishField]: {
+//               query: word,
+//               fuzziness: 'AUTO',
+//               prefix_length: 1,
+//               max_expansions: 50,
+//               boost: 100
+//             }
+//           }
+//         })),
+//         boost: 150
+//       }
+//     });
+//   }
+
+//   // Only for single word: prefix matching
+//   if (words.length === 1) {
+//     shouldClauses.push({
+//       match_phrase_prefix: {
+//         [englishField]: {
+//           query: words[0],
+//           max_expansions: 50,
+//           boost: 15000
+//         }
+//       }
+//     });
+//   }
+
+//   // ================================================
+//   // 🎯 TIER 5: FALLBACK MATCHES (< 5K scores)
+//   // ================================================
+  
+//   shouldClauses.push({
+//     multi_match: {
+//       query: cleanedQuery,
+//       fields: language === 'en' 
+//         ? [englishField] 
+//         : [languageField, englishField],
+//       type: 'best_fields',
+//       operator: 'or',
+//       fuzziness: 'AUTO',
+//       boost: 100
+//     }
+//   });
+
+//   return {
+//     size: size,
+//     query: {
+//       bool: {
+//         should: shouldClauses,
+//         minimum_should_match: 1
+//       }
+//     },
+//     sort: [{ _score: { order: 'desc' } }]
+//   };
+// }
 
   formatResults(esResponse, language, query, analysis) {
     if (!esResponse.hits || !esResponse.hits.hits) {
