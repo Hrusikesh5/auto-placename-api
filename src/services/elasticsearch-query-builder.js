@@ -1384,7 +1384,7 @@ class ElasticsearchQueryBuilderV5 {
         const distance = this.levenshteinDistance(word, keyword);
         const maxDistance = Math.ceil(keyword.length * 0.35);
         if (distance <= maxDistance) {
-          console.log(`   🔤 Phonetic match: "${word}" → "airport" (distance: ${distance}/${maxDistance})`);
+          console.log(`    Phonetic match: "${word}" → "airport" (distance: ${distance}/${maxDistance})`);
           return 'airport';
         }
       }
@@ -1393,7 +1393,7 @@ class ElasticsearchQueryBuilderV5 {
         const distance = this.levenshteinDistance(word, keyword);
         const maxDistance = Math.ceil(keyword.length * 0.35);
         if (distance <= maxDistance) {
-          console.log(`   🔤 Phonetic match: "${word}" → "hotel" (distance: ${distance}/${maxDistance})`);
+          console.log(`    Phonetic match: "${word}" → "hotel" (distance: ${distance}/${maxDistance})`);
           return 'hotel';
         }
       }
@@ -1428,7 +1428,7 @@ class ElasticsearchQueryBuilderV5 {
   const typoType = this.detectTypoKeyword(query);
   
   if (typoType) {
-    console.log(`   ⚠️  Detected typo for type: ${typoType}`);
+    console.log(`    Detected typo for type: ${typoType}`);
     return typoType;
   }
 
@@ -1447,7 +1447,7 @@ class ElasticsearchQueryBuilderV5 {
 
   // ✅ Priority: hotel > airport (more specific destination)
   if (hasHotel && hasAirport) {
-    console.log(`   🔀 Mixed query: prioritizing HOTEL`);
+    console.log(`    Mixed query: prioritizing HOTEL`);
     return 'hotel';
   }
 
@@ -1625,7 +1625,7 @@ class ElasticsearchQueryBuilderV5 {
     });
 
   if (typeKeyword && locationWords.length === 0) {
-    console.log(`   ⚠️  Type-only query: "${typeKeyword}"`);
+    console.log(`    Type-only query: "${typeKeyword}"`);
     
     return {
       size: size,
@@ -1656,7 +1656,7 @@ class ElasticsearchQueryBuilderV5 {
       term: {
         iata: {
           value: potentialIATA,
-          boost: 500000  // ✅ Highest priority
+          boost: 500000  // Highest priority
         }
       }
     });
@@ -1787,14 +1787,14 @@ class ElasticsearchQueryBuilderV5 {
     }
 
     // ================================================
-    // 🏅 TIER 4: WEAK MATCHES (5K-20K scores)
-    // ✅ FIXED: ALL words must match (not just 60%)
+    //  TIER 4: WEAK MATCHES (5K-20K scores)
+    // FIXED: ALL words must match (not just 60%)
     // ================================================
     
     if (words.length >= 2) {
       shouldClauses.push({
         bool: {
-          must: words.map(word => ({  // ✅ Changed from "should" to "must"
+          must: words.map(word => ({  // Changed from "should" to "must"
             match: {
               [englishField]: {
                 query: word,
@@ -1810,7 +1810,7 @@ class ElasticsearchQueryBuilderV5 {
       });
     }
 
-    // ✅ REMOVED WILDCARD ENTIRELY
+    //  REMOVED WILDCARD ENTIRELY
     // Wildcard was causing false matches like "kokata" → "Bengaluru"
 
     // Only for single word: prefix matching
@@ -2156,7 +2156,7 @@ class ElasticsearchQueryBuilderV5 {
     const absoluteScore = topResult.score;
 
     if (analysis.typeKeyword && topResult.type !== analysis.typeKeyword) {
-      console.log(`   ❌ Type mismatch: expected ${analysis.typeKeyword}, got ${topResult.type}`);
+      console.log(`    Type mismatch: expected ${analysis.typeKeyword}, got ${topResult.type}`);
       return {
         quality: 'POOR',
         triggerGoogle: true,
@@ -2184,7 +2184,7 @@ class ElasticsearchQueryBuilderV5 {
       else if (absoluteScore >= 20000) quality = 'GOOD';
     }
 
-    console.log(`   ✅ Quality: ${quality} (score: ${absoluteScore})`);
+    console.log(`    Quality: ${quality} (score: ${absoluteScore})`);
     
     return {
       quality: quality,

@@ -13,12 +13,12 @@ class CacheService {
   async connect() {
     // If cache is disabled, skip connection
     if (!this.enabled) {
-      console.log('⚠️  Redis cache disabled (CACHE_ENABLED=false)');
+      console.log(' Redis cache disabled (CACHE_ENABLED=false)');
       return true;
     }
 
     try {
-      console.log('📡 Connecting to Redis...');
+      console.log('Connecting to Redis...');
       console.log(`   Host: ${config.REDIS.host}:${config.REDIS.port}`);
 
       this.client = redis.createClient({
@@ -53,7 +53,7 @@ class CacheService {
 
       return true;
     } catch (error) {
-      console.error('✗ Redis connection failed:', error.message);
+      console.error('Redis connection failed:', error.message);
       console.error('  Continuing without cache...');
       this.connected = false;
       this.enabled = false; // Disable cache on error
@@ -130,7 +130,7 @@ class CacheService {
       try {
         await this.client.quit();
         this.connected = false;
-        console.log('✓ Redis disconnected');
+        console.log('Redis disconnected');
       } catch (error) {
         console.error('Error disconnecting Redis:', error.message);
       }

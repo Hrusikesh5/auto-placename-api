@@ -547,7 +547,7 @@ class ElasticsearchService {
     return this.connected;
   }
 
-  // ✅ MOVED INSIDE CLASS
+  //  MOVED INSIDE CLASS
   async validateIATAToken(token) {
     if (this.iataCache.has(token)) {
       return this.iataCache.get(token);
@@ -574,7 +574,7 @@ class ElasticsearchService {
       
       return exists;
     } catch (error) {
-      console.error(`   ⚠️  IATA validation error: ${error.message}`);
+      console.error(`     IATA validation error: ${error.message}`);
       return false;
     }
   }

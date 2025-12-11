@@ -136,7 +136,7 @@ async function saveGoogleResult(req, res) {
 
     // Generate missing translations
     if (!translations.ar || !translations.es) {
-      console.log(`   🌍 Generating missing translations...`);
+      console.log(`   Generating missing translations...`);
       const fullTranslations =
         await translationService.translatePlaceToAllLanguages(
           translations.en
